@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ex 6 – Maximum Flow in a Traffic Network</title>
+<style>
+:root{--bg:#f4f6f9;--panel:#fff;--ink:#14213d;--mute:#5b6577;--line:#d9dfe8;--jo:#0b7285;--fw:#b45309;--bad:#b91c1c;--ok:#15803d;--code:#eef2f7;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1522;--panel:#162031;--ink:#e6ebf3;--mute:#9aa6ba;--line:#2a3750;--jo:#4fd1c5;--fw:#f6ad55;--bad:#fc8181;--ok:#68d391;--code:#1d2a41}}
+:root[data-theme="dark"]{--bg:#0e1522;--panel:#162031;--ink:#e6ebf3;--mute:#9aa6ba;--line:#2a3750;--jo:#4fd1c5;--fw:#f6ad55;--bad:#fc8181;--ok:#68d391;--code:#1d2a41}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:1.9rem;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:1.2rem;margin:0 0 12px}
+h3{font-size:1rem;margin:16px 0 4px}
+.sub{color:var(--mute);margin:0 0 22px;max-width:70ch}
+section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;margin-bottom:18px}
+label{display:block;font-weight:600;font-size:.9rem;margin:0 0 4px}
+textarea,input[type=number],input[type=text]{width:100%;font:14px ui-monospace,Menlo,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)}
+textarea{min-height:200px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.row>div{flex:1 1 200px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:inherit;font-weight:600;padding:8px 14px;border-radius:5px;border:1px solid var(--jo);background:var(--jo);color:#fff;cursor:pointer}
+button.alt{background:transparent;color:var(--ink);border-color:var(--line)}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--fw);outline-offset:1px}
+button:disabled{opacity:.5;cursor:wait}
+.hint{color:var(--mute);font-size:.85rem;margin-top:6px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;font:14px ui-monospace,Menlo,Consolas,monospace;margin:6px 0}
+th,td{border:1px solid var(--line);padding:5px 10px;text-align:right}
+td:first-child,th:first-child{text-align:left}
+th{background:var(--code)}
+.msg{padding:10px 12px;border-radius:5px;margin:10px 0;font-weight:600}
+.msg.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.msg.err{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.big{font-size:2rem;font-weight:700;color:var(--jo);margin:4px 0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+svg text{fill:var(--ink);font:12px system-ui,sans-serif}
+.algo{background:var(--code);padding:12px;border-radius:5px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre;overflow-x:auto}
+ol.aug{font:14px ui-monospace,Menlo,Consolas,monospace;padding-left:26px;margin:4px 0}
+.sat{color:var(--bad);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>Ex 6 – Maximum flow in a traffic network</h1>
+<p class="sub">Edit the road network, pick the entry and destination junctions, and get the maximum throughput, the bottleneck roads, road utilisation and what-if results. Then test how Edmonds-Karp scales on grid road networks.</p>
+
+<section>
+<h2>Aim</h2>
+<p style="margin:0">To compute the maximum traffic flow and the bottleneck (minimum cut) roads of a city road network using the Edmonds-Karp algorithm and to analyse what-if scenarios.</p>
+<div class="algo" style="margin-top:12px">1. Start with flow f = 0 on every road.
+2. BFS from the source over roads with residual capacity c - f &gt; 0 (shortest augmenting path).
+3. If the destination is not reached, stop.
+4. Bottleneck b = smallest residual on the path; add b to f along the path, subtract b on reverse edges.
+5. Repeat. Max flow = sum of all b.
+6. Min cut = roads from the set S reachable from the source in the final residual graph to the rest.</div>
+</section>
+
+<section>
+<h2>Part A – Road network</h2>
+<div class="row">
+<div style="flex:3 1 320px"><label for="roads">Roads, one per line: from to capacity (vehicles/hour)</label>
+<textarea id="roads" spellcheck="false"></textarea>
+<p class="hint">Junction names have no spaces. Lines starting with # are ignored.</p></div>
+<div style="flex:1 1 180px"><label for="src">Source junction</label><input id="src" type="text" value="Source">
+<div style="height:10px"></div><label for="dst">Destination junction</label><input id="dst" type="text" value="Central"></div>
+</div>
+<div class="btns"><button id="run">Compute maximum flow</button><button class="alt" id="reset">Reset to city example</button></div>
+<div id="out" aria-live="polite"></div>
+<div id="chartsA" class="grid2" hidden>
+<div><h3>Road utilisation at maximum flow</h3><div id="cUtil"></div></div>
+<div><h3>Throughput under what-if scenarios</h3><div id="cWhat"></div></div>
+</div>
+</section>
+
+<section>
+<h2>What-if scenarios</h2>
+<label for="whatif">One per line: from to new_capacity. Use 0 to close a road.</label>
+<textarea id="whatif" spellcheck="false" style="min-height:80px"></textarea>
+<p class="hint">Each scenario changes only that road and is compared with the base network. Click “Compute maximum flow” to refresh.</p>
+</section>
+
+<section>
+<h2>Part B – Scalability on k × k grid road networks</h2>
+<div class="row">
+<div><label for="ks">Grid sizes k, comma separated</label><input id="ks" type="text" value="10, 20, 30"></div>
+<div><label for="lo">Capacity range (min, max)</label><div class="row" style="gap:8px"><input id="lo" type="number" value="200"><input id="hi" type="number" value="2000"></div></div>
+<div><label for="seed">Random seed</label><input id="seed" type="number" value="7"></div>
+</div>
+<p class="hint">Source is the top-left junction, destination the bottom-right. Roads run right and down. Keep k at 40 or below.</p>
+<div class="btns"><button id="runB">Run scalability test</button></div>
+<div id="outB" aria-live="polite"></div>
+<div id="cScale"></div>
+</section>
+
+<section>
+<h2>Result</h2>
+<p style="margin:0">Edmonds-Karp finds the maximum throughput using shortest augmenting paths, and the minimum cut read from the final residual graph has the same capacity as the flow, which verifies the max-flow min-cut theorem. Only widening roads in the minimum cut raises throughput; upgrading roads with spare capacity does not.</p>
+</section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+const CITY = "Source Guindy 1800\nSource Saidapet 1500\nGuindy T.Nagar 900\nGuindy Vadapalani 1000\nSaidapet T.Nagar 800\nSaidapet Kodambakkam 700\nT.Nagar Egmore 1200\nVadapalani Kodambakkam 400\nVadapalani Egmore 600\nKodambakkam Central 900\nEgmore Central 1600\nT.Nagar Kodambakkam 300";
+const WHAT = "Egmore Central 0\nKodambakkam Central 1500";
+
+class Net{
+  constructor(names){ this.names = names; this.n = names.length; this.idx = new Map(names.map((s, i) => [s, i]));
+    this.cap = Array.from({length: this.n}, () => new Int32Array(this.n)); this.adj = Array.from({length: this.n}, () => new Set()); }
+  add(u, v, c){ this.cap[u][v] += c; this.adj[u].add(v); this.adj[v].add(u); }
+  maxflow(s, t){
+    const n = this.n, flow = Array.from({length: n}, () => new Int32Array(n)), paths = []; let total = 0;
+    for (;;){
+      const par = new Int32Array(n).fill(-1); par[s] = s; const q = [s]; let h = 0;
+      while (h < q.length && par[t] === -1){ const u = q[h++];
+        for (const v of this.adj[u]) if (par[v] === -1 && this.cap[u][v] - flow[u][v] > 0){ par[v] = u; q.push(v); } }
+      if (par[t] === -1) break;
+      let b = Infinity, v = t; while (v !== s){ const u = par[v]; b = Math.min(b, this.cap[u][v] - flow[u][v]); v = u; }
+      const path = [t]; v = t; while (v !== s){ const u = par[v]; flow[u][v] += b; flow[v][u] -= b; v = u; path.push(u); }
+      total += b; paths.push({path: path.reverse().map(i => this.names[i]), b});
+    }
+    return {total, flow, paths};
+  }
+  mincut(s, flow){
+    const seen = new Set([s]), q = [s];
+    for (let h = 0; h < q.length; h++){ const u = q[h];
+      for (const v of this.adj[u]) if (!seen.has(v) && this.cap[u][v] - flow[u][v] > 0){ seen.add(v); q.push(v); } }
+    const cut = [];
+    for (const u of seen) for (const v of this.adj[u]) if (!seen.has(v) && this.cap[u][v] > 0) cut.push([this.names[u], this.names[v], this.cap[u][v]]);
+    return cut;
+  }
+}
+function parseLines(text, what){
+  const rows = [], lines = text.split("\n");
+  lines.forEach((raw, i) => { const line = raw.trim(); if (!line || line[0] === "#") return;
+    const p = line.split(/[\s,]+/);
+    if (p.length !== 3 || !/^\d+$/.test(p[2])) throw new Error(`${what}, line ${i + 1}: use “from to capacity” with a whole number, for example Guindy T.Nagar 900.`);
+    rows.push([p[0], p[1], parseInt(p[2], 10)]); });
+  return rows;
+}
+function build(roads, overrides){
+  const names = []; for (const [u, v] of roads){ if (!names.includes(u)) names.push(u); if (!names.includes(v)) names.push(v); }
+  const g = new Net(names); for (const [u, v, c] of roads) g.add(g.idx.get(u), g.idx.get(v), c);
+  if (overrides) for (const [u, v, c] of overrides){ if (!g.idx.has(u) || !g.idx.has(v)) throw new Error(`What-if road ${u} → ${v} is not in the network.`);
+    const a = g.idx.get(u), b = g.idx.get(v); if (!g.adj[a].has(b)) throw new Error(`What-if road ${u} → ${v} is not in the network.`); g.cap[a][b] = c; }
+  return g;
+}
+
+/* ---------- charts ---------- */
+function hbars(el, items, label, unit){
+  const rowH = 26, L = 175, R = 90, W = 460, H = items.length * rowH + 10, max = Math.max(...items.map(i => i.max), 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${label}">`;
+  items.forEach((it, i) => { const y = i * rowH + 4, w = (W - L - R) * it.value / max;
+    s += `<text x="${L - 6}" y="${y + 14}" text-anchor="end">${esc(it.label)}</text><rect x="${L}" y="${y}" width="${(W - L - R) * it.max / max}" height="18" fill="var(--line)" opacity=".55"/><rect x="${L}" y="${y}" width="${Math.max(w, 0)}" height="18" fill="${it.color}"/><text x="${L + (W - L - R) * it.max / max + 6}" y="${y + 14}">${it.text}</text>`; });
+  el.innerHTML = s + "</svg>";
+}
+function line(el, xs, ys, xl, yl){
+  const W = 520, H = 280, L = 56, R = 16, T = 14, B = 44, max = Math.max(...ys) * 1.1 || 1;
+  const x = i => L + (xs.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (xs.length - 1)), y = v => T + (H - T - B) * (1 - v / max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:560px" role="img" aria-label="Running time against number of junctions">`;
+  for (let k = 0; k <= 4; k++){ const v = max * k / 4; s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v >= 100 ? v.toFixed(0) : v.toFixed(1)}</text>`; }
+  xs.forEach((l, i) => s += `<text x="${x(i)}" y="${H - B + 16}" text-anchor="middle">${l}</text>`);
+  s += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle">${xl}</text><text x="12" y="${H / 2}" transform="rotate(-90 12 ${H / 2})" text-anchor="middle">${yl}</text>`;
+  s += `<polyline fill="none" stroke="var(--jo)" stroke-width="2.5" points="${ys.map((v, i) => x(i) + "," + y(v)).join(" ")}"/>`;
+  ys.forEach((v, i) => s += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="var(--jo)"><title>${xs[i]}: ${v.toFixed(1)} ms</title></circle>`);
+  el.innerHTML = s + "</svg>";
+}
+
+/* ---------- Part A ---------- */
+function run(){
+  const out = $("out"); $("chartsA").hidden = true;
+  try {
+    const roads = parseLines($("roads").value, "Roads");
+    if (!roads.length) throw new Error("Add at least one road.");
+    const sName = $("src").value.trim(), tName = $("dst").value.trim();
+    const g = build(roads);
+    if (!g.idx.has(sName)) throw new Error(`Source “${esc(sName)}” is not a junction in the network.`);
+    if (!g.idx.has(tName)) throw new Error(`Destination “${esc(tName)}” is not a junction in the network.`);
+    if (sName === tName) throw new Error("Source and destination must be different junctions.");
+    const s = g.idx.get(sName), t = g.idx.get(tName);
+    const r = g.maxflow(s, t), cut = g.mincut(s, r.flow), cutCap = cut.reduce((a, c) => a + c[2], 0);
+    let h = `<div class="big">${r.total} vehicles/hour</div><div>Maximum throughput from ${esc(sName)} to ${esc(tName)} in ${r.paths.length} augmentation${r.paths.length === 1 ? "" : "s"}.</div>`;
+    h += `<h3>Augmenting paths (BFS, shortest first)</h3>` + (r.paths.length ? `<ol class="aug">${r.paths.map(p => `<li>${p.path.map(esc).join(" → ")} (+${p.b})</li>`).join("")}</ol>` : `<p class="hint">No path from the source to the destination, so the flow is 0.</p>`);
+    h += `<h3>Bottleneck roads (minimum cut)</h3><div class="scroll"><table><tr><th>Road</th><th>Capacity</th></tr>${cut.map(c => `<tr><td>${esc(c[0])} → ${esc(c[1])}</td><td>${c[2]}</td></tr>`).join("")}<tr><th>Cut capacity</th><th>${cutCap}</th></tr></table></div>`;
+    h += `<div class="msg ${cutCap === r.total ? "ok" : "err"}">${cutCap === r.total ? `Max-flow min-cut theorem verified: cut capacity ${cutCap} = max flow ${r.total}.` : "Cut capacity differs from max flow."}</div>`;
+    const seen = new Set(), list = [];
+    for (const [u, v] of roads){ const k = u + ">" + v; if (seen.has(k)) continue; seen.add(k); const a = g.idx.get(u), b = g.idx.get(v); list.push({u, v, c: g.cap[a][b], f: Math.max(r.flow[a][b], 0)}); }
+    h += `<h3>Road utilisation</h3><div class="scroll"><table><tr><th>Road</th><th>Flow</th><th>Capacity</th><th>Utilisation</th></tr>${list.map(e => { const p = e.c ? 100 * e.f / e.c : 0;
+      return `<tr><td>${esc(e.u)} → ${esc(e.v)}</td><td>${e.f}</td><td>${e.c}</td><td class="${p >= 100 ? "sat" : ""}">${p.toFixed(1)}%</td></tr>`; }).join("")}</table></div>`;
+    const wi = parseLines($("whatif").value, "What-if");
+    const sc = [{label: "Base network", v: r.total}];
+    let wh = "";
+    for (const w of wi){ const g2 = build(roads, [w]); const v = g2.maxflow(g2.idx.get(sName), g2.idx.get(tName)).total; sc.push({label: `${w[0]} → ${w[1]} = ${w[2]}`, v});
+      const d = r.total ? 100 * (v - r.total) / r.total : 0; wh += `<tr><td>${esc(w[0])} → ${esc(w[1])} set to ${w[2]}</td><td>${v}</td><td>${d >= 0 ? "+" : ""}${d.toFixed(1)}%</td></tr>`; }
+    if (wh) h += `<h3>What-if results</h3><div class="scroll"><table><tr><th>Scenario</th><th>New throughput</th><th>Change</th></tr>${wh}</table></div>`;
+    out.innerHTML = h; $("chartsA").hidden = false;
+    hbars($("cUtil"), list.map(e => ({label: `${e.u} → ${e.v}`, value: e.f, max: e.c, color: e.c && e.f >= e.c ? "var(--bad)" : "var(--jo)", text: `${e.f}/${e.c}`})), "Road utilisation");
+    const mx = Math.max(...sc.map(x => x.v));
+    hbars($("cWhat"), sc.map((x, i) => ({label: x.label, value: x.v, max: mx, color: i ? "var(--fw)" : "var(--jo)", text: String(x.v)})), "Throughput by scenario");
+  } catch (e){ out.innerHTML = `<div class="msg err">${e.message}</div>`; }
+}
+$("roads").value = CITY; $("whatif").value = WHAT;
+$("run").onclick = run;
+$("reset").onclick = () => { $("roads").value = CITY; $("whatif").value = WHAT; $("src").value = "Source"; $("dst").value = "Central"; run(); };
+
+/* ---------- Part B ---------- */
+function rng(seed){ let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const tick = () => new Promise(r => setTimeout(r, 15));
+async function runB(){
+  const out = $("outB"), btn = $("runB");
+  const ks = $("ks").value.split(",").map(x => parseInt(x.trim(), 10)).filter(x => x >= 2);
+  const lo = parseInt($("lo").value, 10), hi = parseInt($("hi").value, 10), seed = parseInt($("seed").value, 10) || 0;
+  if (!ks.length || ks.some(k => k > 40) || !(lo >= 1) || hi < lo){ out.innerHTML = `<div class="msg err">Enter grid sizes from 2 to 40 and a valid capacity range (min ≥ 1, max ≥ min).</div>`; return; }
+  ks.sort((a, b) => a - b); btn.disabled = true; $("cScale").innerHTML = "";
+  const rows = [];
+  for (const k of ks){
+    out.innerHTML = `<div class="msg ok">Running ${k} × ${k}…</div>`; await tick();
+    const names = Array.from({length: k * k}, (_, i) => "J" + i), g = new Net(names), r = rng(seed + k), ri = () => lo + Math.floor(r() * (hi - lo + 1));
+    for (let i = 0; i < k; i++) for (let j = 0; j < k; j++){ const u = i * k + j; if (j + 1 < k) g.add(u, u + 1, ri()); if (i + 1 < k) g.add(u, u + k, ri()); }
+    const t0 = performance.now(), res = g.maxflow(0, k * k - 1), ms = performance.now() - t0;
+    rows.push({k, v: k * k, mf: res.total, its: res.paths.length, ms});
+  }
+  out.innerHTML = `<div class="scroll"><table><tr><th>Grid</th><th>Junctions |V|</th><th>Max flow</th><th>Augmentations</th><th>Time (ms)</th></tr>${rows.map(r => `<tr><td>${r.k} × ${r.k}</td><td>${r.v}</td><td>${r.mf}</td><td>${r.its}</td><td>${r.ms.toFixed(1)}</td></tr>`).join("")}</table></div>`;
+  line($("cScale"), rows.map(r => `${r.k}×${r.k}`), rows.map(r => r.ms), "Grid size (junctions |V| = k²)", "Time (ms)");
+  btn.disabled = false;
+}
+$("runB").onclick = runB;
+run();
+</script>
+</body>
+</html>
